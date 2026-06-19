@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* Scan the package source so Tailwind generates the utility classes the EDITOR
+   chrome (the executable block's UI) still uses. The display path (PostRenderer)
+   no longer emits any classes — it's pure semantic HTML, styled by .rendered below. */
+@source "../../../src";
+
+/* Minimal shadcn-style tokens for the editor chrome + this demo's own layout. */
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  --color-card: #ffffff;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #71717a;
+  --color-primary: #2563eb;
+  --color-border: #e4e4e7;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  margin: 0;
+}
