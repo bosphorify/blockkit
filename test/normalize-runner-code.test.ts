@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeRunnerCode } from '@bosphorify/blockkit/runner'
+import { normalizeRunnerCode } from '../src/normalize-runner-code'
 
 describe('normalizeRunnerCode', () => {
   it('passes a bare JSX expression through', () => {

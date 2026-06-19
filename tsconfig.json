@@ -14,12 +14,7 @@
     "declaration": true,
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
-    "types": [],
-    "paths": {
-      "@bosphorify/blockkit": ["./src/index.ts"],
-      "@bosphorify/blockkit/editor": ["./src/editor.ts"],
-      "@bosphorify/blockkit/runner": ["./src/runner.ts"]
-    }
+    "types": []
   },
   "include": ["src", "test"]
 }
