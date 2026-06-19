@@ -1,0 +1,113 @@
+{
+  "name": "@bosphorify/blockkit",
+  "version": "0.1.0",
+  "description": "Curated block editor + renderer on top of BlockNote: one registry, an allowlist renderer (block JSON → React), one-way agent markdown, and an opt-in executable block.",
+  "keywords": [
+    "blocknote",
+    "block-editor",
+    "rich-text",
+    "wysiwyg",
+    "react",
+    "renderer",
+    "markdown",
+    "mdx-alternative",
+    "content"
+  ],
+  "license": "MIT",
+  "author": "bosphorify",
+  "homepage": "https://github.com/bosphorify/blockkit#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bosphorify/blockkit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bosphorify/blockkit/issues"
+  },
+  "type": "module",
+  "sideEffects": [
+    "./dist/editor.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./editor": {
+      "types": "./dist/editor.d.ts",
+      "import": "./dist/editor.js"
+    },
+    "./runner": {
+      "types": "./dist/runner.d.ts",
+      "import": "./dist/runner.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "@blocknote/core": ">=0.51",
+    "@blocknote/mantine": ">=0.51",
+    "@blocknote/react": ">=0.51",
+    "@codemirror/lang-javascript": ">=6",
+    "@uiw/react-codemirror": ">=4",
+    "@mantine/core": ">=8",
+    "@mantine/hooks": ">=8",
+    "react-runner": "^1"
+  },
+  "peerDependenciesMeta": {
+    "@blocknote/core": { "optional": true },
+    "@blocknote/mantine": { "optional": true },
+    "@blocknote/react": { "optional": true },
+    "@codemirror/lang-javascript": { "optional": true },
+    "@uiw/react-codemirror": { "optional": true },
+    "@mantine/core": { "optional": true },
+    "@mantine/hooks": { "optional": true },
+    "react-runner": { "optional": true }
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.577.0",
+    "prism-react-renderer": "^2.4.1",
+    "radix-ui": "^1.6.0",
+    "recharts": "^3.8.0",
+    "tailwind-merge": "^3.0.2"
+  },
+  "devDependencies": {
+    "@blocknote/core": "0.51.4",
+    "@blocknote/mantine": "0.51.4",
+    "@blocknote/react": "0.51.4",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@mantine/core": "^9.3.1",
+    "@mantine/hooks": "^9.3.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@uiw/react-codemirror": "^4.25.10",
+    "jsdom": "^28.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-runner": "^1.0.5",
+    "tsup": "^8.0.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.5"
+  }
+}

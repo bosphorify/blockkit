@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "declaration": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": [],
+    "paths": {
+      "@bosphorify/blockkit": ["./src/index.ts"],
+      "@bosphorify/blockkit/editor": ["./src/editor.ts"],
+      "@bosphorify/blockkit/runner": ["./src/runner.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}
