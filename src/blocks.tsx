@@ -3,22 +3,15 @@ import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core'
 import { createReactBlockSpec } from '@blocknote/react'
 import CodeMirror from '@uiw/react-codemirror'
 import * as React from 'react'
-import { track as capture } from './track'
-import {
-  ConfigForm,
-  REGISTRY,
-  type RegistryEntry,
-  SCOPE_NAMES,
-} from './registry'
 import { CodeRunner } from './CodeRunner'
 
 /**
- * BlockNote schema = a CONSTRAINED pick of default blocks + curated blocks from
- * the REGISTRY + one executable block.
+ * BlockNote schema = a CONSTRAINED pick of default blocks + one executable
+ * block that runs author-written JSX (see CodeRunner).
  *
- * The pick is the WYSIWYG contract: every type here has a renderer in
- * PostRenderer, so authors can never insert something the published page
- * silently drops (test/renderer-parity.test.tsx enforces this).
+ * Every type here has a renderer in PostRenderer, so authors can never insert
+ * something the published page silently drops (test/renderer-parity.test.tsx
+ * enforces this).
  */
 const SUPPORTED_DEFAULTS = {
   paragraph: defaultBlockSpecs.paragraph,
@@ -30,66 +23,19 @@ const SUPPORTED_DEFAULTS = {
   image: defaultBlockSpecs.image,
 }
 
-function makeCuratedBlock(entry: RegistryEntry) {
-  return createReactBlockSpec(
-    {
-      type: entry.type,
-      propSchema: entry.propSchema,
-      content: entry.content,
-    },
-    {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      render: ({ block, editor, contentRef }: any) => {
-        const Comp = entry.Component
-        const componentProps = entry.toProps(block.props)
-        const [configOpen, setConfigOpen] = React.useState(false)
-        return (
-          <div className="my-1 w-full rounded-none border border-border bg-card p-3">
-            <div
-              className="mb-1 flex items-center justify-between font-mono text-[11px] text-muted-foreground"
-              contentEditable={false}
-            >
-              <span>{entry.title.toLowerCase()}</span>
-              <button
-                type="button"
-                onClick={() => setConfigOpen((o) => !o)}
-                className="rounded px-1.5 py-0.5 hover:bg-muted"
-                aria-expanded={configOpen}
-                aria-label={`configure ${entry.title}`}
-              >
-                {configOpen ? '✕ close' : '⚙ configure'}
-              </button>
-            </div>
-            {configOpen ? (
-              <ConfigForm
-                entry={entry}
-                props={block.props}
-                onChange={(patch) => editor.updateBlock(block, { props: patch })}
-              />
-            ) : null}
-            {entry.content === 'inline' ? (
-              <Comp {...componentProps}>
-                <span ref={contentRef} />
-              </Comp>
-            ) : (
-              <Comp {...componentProps} />
-            )}
-          </div>
-        )
-      },
-    },
-  )
-}
-
 const DEFAULT_CODE = `const Demo = () => {
   const [n, setN] = React.useState(6)
-  const data = Array.from({ length: n }, (_, i) => (i + 1) * (i + 1))
+  const squares = Array.from({ length: n }, (_, i) => (i + 1) * (i + 1))
   return (
     <div>
-      <p>n = {n}, sum = {data.reduce((a, b) => a + b, 0)}</p>
+      <p>n = {n}, sum of squares = {squares.reduce((a, b) => a + b, 0)}</p>
       <button onClick={() => setN((v) => Math.min(12, v + 1))}>more</button>{' '}
       <button onClick={() => setN((v) => Math.max(1, v - 1))}>less</button>
-      <Chart type="area" values={data} label={"squares up to " + n} />
+      <ul>
+        {squares.map((s, i) => (
+          <li key={i}>{i + 1}² = {s}</li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -98,9 +44,11 @@ const DEFAULT_CODE = `const Demo = () => {
 
 function ExecutableView({
   code: externalCode,
+  scope,
   onCommit,
 }: {
   code: string
+  scope?: Record<string, unknown>
   onCommit: (code: string) => void
 }) {
   const [code, setCode] = React.useState(externalCode)
@@ -132,10 +80,8 @@ function ExecutableView({
     >
       <div className="overflow-hidden rounded-none border border-border bg-card">
         <div className="flex flex-wrap items-center gap-x-2 border-b border-amber-300/60 bg-amber-50 px-2 py-1 font-mono text-[10px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-          <span>⚠ advanced · runs code (admins only)</span>
-          <span className="opacity-70">
-            scope: {SCOPE_NAMES} · end with &lt;MyComponent /&gt;
-          </span>
+          <span>⚠ advanced · runs code</span>
+          <span className="opacity-70">scope: React · end with &lt;MyComponent /&gt;</span>
         </div>
         <CodeMirror
           value={code}
@@ -151,42 +97,45 @@ function ExecutableView({
         />
       </div>
       <div className="prose prose-sm max-w-none overflow-auto rounded-none border border-border bg-card p-3">
-        <CodeRunner code={code} />
+        <CodeRunner code={code} scope={scope} />
       </div>
     </div>
   )
 }
 
-const Executable = createReactBlockSpec(
-  {
-    type: 'executable',
-    propSchema: { code: { default: DEFAULT_CODE } },
-    content: 'none',
-  },
-  {
-    render: ({ block, editor }) => (
-      <ExecutableView
-        code={String(block.props.code)}
-        onCommit={(code) => {
-          editor.updateBlock(block, { props: { code } })
-          capture('executable_edited', { chars: code.length })
-        }}
-      />
-    ),
-  },
-)
+function makeExecutable(scope?: Record<string, unknown>) {
+  return createReactBlockSpec(
+    {
+      type: 'executable',
+      propSchema: { code: { default: DEFAULT_CODE } },
+      content: 'none',
+    },
+    {
+      render: ({ block, editor }) => (
+        <ExecutableView
+          code={String(block.props.code)}
+          scope={scope}
+          onCommit={(code) => editor.updateBlock(block, { props: { code } })}
+        />
+      ),
+    },
+  )
+}
 
-const curatedSpecs = Object.fromEntries(
-  REGISTRY.map((entry) => [entry.type, makeCuratedBlock(entry)()]),
-)
+/**
+ * Build the editor schema. Pass `scope` to make extra values (e.g. your own
+ * components) available to author code inside executable blocks.
+ */
+export function createEditorSchema(scope?: Record<string, unknown>) {
+  return BlockNoteSchema.create({
+    blockSpecs: {
+      ...SUPPORTED_DEFAULTS,
+      executable: makeExecutable(scope)(),
+    },
+  })
+}
 
-export const editorSchema = BlockNoteSchema.create({
-  blockSpecs: {
-    ...SUPPORTED_DEFAULTS,
-    ...curatedSpecs,
-    executable: Executable(),
-  },
-})
+export const editorSchema = createEditorSchema()
 
 export type EditorSchema = typeof editorSchema
 

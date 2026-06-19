@@ -2,9 +2,9 @@ import { defineConfig } from 'tsup'
 
 /**
  * Publish build. Emits ESM + .d.ts for the three entries to dist/. Peers (React,
- * BlockNote, CodeMirror, react-runner) and runtime deps stay external so the
- * consumer dedupes a single copy. Dependency CSS side-effect imports (e.g.
- * @blocknote styles) remain as external imports for the host to resolve.
+ * BlockNote, CodeMirror, react-runner) stay external so the consumer dedupes a
+ * single copy. Dependency CSS side-effect imports (e.g. @blocknote styles)
+ * remain as external imports for the host to resolve.
  *
  * `npm run build` (or `npm publish` via prepublishOnly) runs this.
  */
@@ -21,7 +21,8 @@ export default defineConfig({
   dts: true,
   clean: true,
   treeshake: true,
-  // everything not authored here is external (peers + deps)
+  // every peer stays external so the consumer dedupes a single copy (no
+  // bundled runtime deps remain — the package ships only its own source)
   external: [
     /^react($|\/)/,
     /^react-dom($|\/)/,
@@ -29,12 +30,5 @@ export default defineConfig({
     /^@codemirror\//,
     '@uiw/react-codemirror',
     'react-runner',
-    'recharts',
-    'radix-ui',
-    'lucide-react',
-    'prism-react-renderer',
-    'class-variance-authority',
-    'clsx',
-    'tailwind-merge',
   ],
 })

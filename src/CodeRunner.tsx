@@ -1,22 +1,20 @@
 import * as React from 'react'
 import { useRunner } from 'react-runner'
 import { normalizeRunnerCode } from './normalize-runner-code'
-import { CURATED_SCOPE } from './registry'
 
 /**
  * Runs an author's component (JSX) and renders it.
  *
  * SECURITY:
- *  - Scope is passed EXPLICITLY (React + the curated components) — we never
- *    write to globalThis, so author code can't reach app internals by accident.
+ *  - Scope is passed EXPLICITLY (React + an optional caller-provided `scope`) —
+ *    we never write to globalThis, so author code can't reach app internals by
+ *    accident. Inject your own components via the `scope` prop.
  *  - Runs CLIENT-ONLY: `useRunner` uses `new Function`, so we feed it empty code
  *    until mounted. Author code therefore NEVER executes on the server (no
- *    chance of touching server secrets). Only admins author this code.
+ *    chance of touching server secrets).
  *  - Real cross-origin isolation (for untrusted/multi-tenant code or npm
  *    imports) is a future iframe/Sandpack sandbox.
  */
-
-const SCOPE = { React, ...CURATED_SCOPE }
 
 class Boundary extends React.Component<
   { children: React.ReactNode },
@@ -42,7 +40,16 @@ function ErrorBox({ message }: { message: string }) {
   )
 }
 
-export function CodeRunner({ code }: { code: string }) {
+export function CodeRunner({
+  code,
+  scope,
+}: {
+  code: string
+  /** Extra values available to author code, e.g. your design-system components. */
+  scope?: Record<string, unknown>
+}) {
+  const runnerScope = React.useMemo(() => ({ React, ...scope }), [scope])
+
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
 
@@ -60,7 +67,7 @@ export function CodeRunner({ code }: { code: string }) {
   // empty code on the server / before mount → nothing executes
   const { element, error } = useRunner({
     code: mounted ? runnable : '',
-    scope: SCOPE,
+    scope: runnerScope,
   })
 
   if (!mounted) return <div className="text-sm text-muted-foreground">rendering…</div>
