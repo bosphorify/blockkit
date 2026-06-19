@@ -1,15 +1,20 @@
 import * as React from 'react'
-import { CodeBlock } from './components'
-import { REGISTRY_BY_TYPE } from './registry'
 
 /**
  * The executable block's runtime (react-runner) is heavy and rarely needed —
  * load it only on the client, only when a document actually contains an
  * executable block. SSR and plain posts never pay for it.
  */
-function LazyCodeRunner({ code }: { code: string }) {
+function LazyCodeRunner({
+  code,
+  scope,
+}: {
+  code: string
+  scope?: Record<string, unknown>
+}) {
   const [Runner, setRunner] = React.useState<React.ComponentType<{
     code: string
+    scope?: Record<string, unknown>
   }> | null>(null)
   React.useEffect(() => {
     let cancelled = false
@@ -23,18 +28,18 @@ function LazyCodeRunner({ code }: { code: string }) {
   if (!Runner) {
     return <div className="text-sm text-muted-foreground">rendering…</div>
   }
-  return <Runner code={code} />
+  return <Runner code={code} scope={scope} />
 }
 
 /**
- * Renders a BlockNote document (JSON) → React for the reader view AND the
- * editor preview — the single canonical render path.
+ * Renders a BlockNote document (JSON) → React for the reader view — WITHOUT
+ * loading the editor. Lets a site or app display authored content far lighter
+ * than shipping BlockNote, and server-side (SSR) since it's plain React.
  *
  * SECURITY: an explicit allowlist. Known block types render; anything unknown
  * is dropped (default-deny). The executable block is DENIED unless the caller
- * passes `allowExecutable` explicitly (our own public blog + admin preview do —
- * content is admin-authored; see CLAUDE.md trust rules), and even then it runs
- * ONLY through the client-only CodeRunner (never server-evaluated).
+ * passes `allowExecutable`, and even then it runs ONLY through the client-only
+ * CodeRunner (never server-evaluated).
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,25 +87,9 @@ function renderInline(content: Inline): React.ReactNode {
 const inlineText = (content: Inline): string =>
   Array.isArray(content) ? content.map((n) => n?.text ?? '').join('') : ''
 
-function CuratedBlock({ block }: { block: Block }) {
-  const entry = REGISTRY_BY_TYPE[block.type]
-  if (!entry) return null
-  const Comp = entry.Component
-  const props = entry.toProps(block.props ?? {})
-  if (entry.content === 'inline') {
-    return <Comp {...props}>{renderInline(block.content)}</Comp>
-  }
-  return <Comp {...props} />
-}
-
-type RenderOpts = { allowExecutable: boolean }
+type RenderOpts = { allowExecutable: boolean; scope?: Record<string, unknown> }
 
 function renderBlock(block: Block, opts: RenderOpts): React.ReactNode {
-  // curated blocks (allowlisted via registry)
-  if (REGISTRY_BY_TYPE[block.type]) {
-    return <CuratedBlock block={block} />
-  }
-
   switch (block.type) {
     case 'paragraph':
       return <p>{renderInline(block.content)}</p>
@@ -113,10 +102,9 @@ function renderBlock(block: Block, opts: RenderOpts): React.ReactNode {
       return <blockquote>{renderInline(block.content)}</blockquote>
     case 'codeBlock':
       return (
-        <CodeBlock
-          code={inlineText(block.content)}
-          language={String(block.props?.language ?? 'text')}
-        />
+        <pre className="my-6 overflow-x-auto rounded-lg border border-border p-4 text-[13px] leading-relaxed">
+          <code>{inlineText(block.content)}</code>
+        </pre>
       )
     case 'image':
       return block.props?.url ? (
@@ -134,7 +122,7 @@ function renderBlock(block: Block, opts: RenderOpts): React.ReactNode {
       // default-deny: only rendered when the caller explicitly opts in,
       // and even then client-only (never server-evaluated)
       return opts.allowExecutable ? (
-        <LazyCodeRunner code={String(block.props?.code ?? '')} />
+        <LazyCodeRunner code={String(block.props?.code ?? '')} scope={opts.scope} />
       ) : null
     default:
       // default-deny: unknown block types render nothing
@@ -188,11 +176,14 @@ function renderBlocks(blocks: Block[], opts: RenderOpts): React.ReactNode[] {
 export function PostRenderer({
   document,
   allowExecutable = false,
+  scope,
 }: {
   document: Block[]
-  /** Opt-in to render executable blocks (admin-authored content only). */
+  /** Opt-in to render executable blocks (trusted/admin-authored content only). */
   allowExecutable?: boolean
+  /** Extra values available to executable-block author code. */
+  scope?: Record<string, unknown>
 }) {
   if (!Array.isArray(document)) return null
-  return <>{renderBlocks(document, { allowExecutable })}</>
+  return <>{renderBlocks(document, { allowExecutable, scope })}</>
 }

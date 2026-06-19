@@ -24,12 +24,6 @@ const SAMPLES: Record<string, any> = {
   numberedListItem: { type: 'numberedListItem', props: {}, content: text('numbered'), children: [] },
   codeBlock: { type: 'codeBlock', props: { language: 'ts' }, content: text('const x = 1'), children: [] },
   image: { type: 'image', props: { url: 'https://x.com/a.png', caption: 'cap' }, content: [], children: [] },
-  callout: { type: 'callout', props: { calloutType: 'info', title: 't' }, content: text('call'), children: [] },
-  slider: { type: 'slider', props: { label: 'L', min: 0, max: 10, start: 5, unit: '' }, content: [], children: [] },
-  chart: { type: 'chart', props: { chartType: 'bar', label: 'C', values: '1,2' }, content: [], children: [] },
-  quiz: { type: 'quiz', props: { question: 'Q', options: 'a\nb', answer: 0 }, content: [], children: [] },
-  embed: { type: 'embed', props: { url: 'https://youtu.be/abc', title: 't' }, content: [], children: [] },
-  faq: { type: 'faq', props: { items: 'Q? | A.' }, content: [], children: [] },
   executable: { type: 'executable', props: { code: '<div>x</div>' }, content: [], children: [] },
 }
 

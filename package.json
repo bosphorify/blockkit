@@ -1,7 +1,7 @@
 {
   "name": "@bosphorify/blockkit",
   "version": "0.1.0",
-  "description": "Curated block editor + renderer on top of BlockNote: one registry, an allowlist renderer (block JSON → React), one-way agent markdown, and an opt-in executable block.",
+  "description": "A runnable JSX block for BlockNote (client-only eval) plus a light block-JSON → React renderer.",
   "keywords": [
     "blocknote",
     "block-editor",
@@ -9,8 +9,9 @@
     "wysiwyg",
     "react",
     "renderer",
-    "markdown",
-    "mdx-alternative",
+    "executable",
+    "code",
+    "react-runner",
     "content"
   ],
   "license": "MIT",
@@ -83,15 +84,7 @@
     "@mantine/hooks": { "optional": true },
     "react-runner": { "optional": true }
   },
-  "dependencies": {
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.577.0",
-    "prism-react-renderer": "^2.4.1",
-    "radix-ui": "^1.6.0",
-    "recharts": "^3.8.0",
-    "tailwind-merge": "^3.0.2"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@blocknote/core": "0.51.4",
     "@blocknote/mantine": "0.51.4",
