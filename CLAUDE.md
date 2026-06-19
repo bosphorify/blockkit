@@ -6,37 +6,40 @@ usage is in [README.md](README.md). Read both before changing anything.
 ## What this project is
 
 `@bosphorify/blockkit` is a **runnable JSX block for [BlockNote](https://www.blocknotejs.org/),
-plus a light read-only renderer**. BlockNote provides the Notion-style WYSIWYG editor and a
-block-JSON document model. blockkit is a thin **layer over** BlockNote that adds:
+with a constrained editor and a read-only view**. BlockNote provides the Notion-style WYSIWYG
+editor and a block-JSON document model. blockkit is a thin **layer over** BlockNote that adds:
 
 1. **one executable block** that runs author-written JSX at view time (`react-runner` →
    `eval`), authored in an inline CodeMirror editor,
 2. a **constrained editor** (`BlockEditor`) = BlockNote's native blocks + that executable block,
-3. a **light allowlist renderer** (`PostRenderer`: block JSON → React) that displays stored
-   content **without loading BlockNote**, so a host can render far cheaper (and server-side)
-   than mounting the editor.
+3. a **read-only view** (`BlockView` = `<BlockNoteView editable={false}>`) — displaying a
+   document is **BlockNote's own rendering**, so every block prop is honored with no
+   hand-maintained renderer to drift.
 
 The document of record is **BlockNote block JSON** — lossless and canonical.
 
 > **Scope discipline (this is the point of the package).** blockkit intentionally does NOT
 > ship curated blocks (callouts, charts, quizzes, etc.), a block registry, config forms, a
-> markdown bridge, or an analytics seam — those were removed deliberately. Anyone who wants
-> more block types adds them with BlockNote's own `createReactBlockSpec`. Do not re-introduce
-> that machinery here; keep this package about the runnable block + native rendering.
+> markdown bridge, an analytics seam, or a hand-rolled renderer — those were removed
+> deliberately. Rendering is BlockNote's job. Anyone who wants more block types adds them with
+> BlockNote's own `createReactBlockSpec`. Keep this package about the runnable block.
 
 ## Golden rules (do not violate)
 
-- **Never fork BlockNote.** Use it as a library. The executable block is a
-  `createReactBlockSpec` entry; the document stays BlockNote block JSON.
-- **Executable block = opt-in and client-only.** It lives behind the `/runner` entry
-  (`react-runner` → `eval`/`new Function`). `PostRenderer` renders it **only** when the
-  caller passes `allowExecutable`, and **only** via the client-only `CodeRunner` (empty
-  output during SSR, so author code can never touch server secrets).
+- **Never fork BlockNote, and don't re-implement its rendering.** Use it as a library. The
+  executable block is a `createReactBlockSpec` entry; display goes through BlockNote
+  (`BlockView`, or the host's own `BlockNoteView` / `blocksToFullHTML`). We learned the hard
+  way that a hand-rolled renderer silently drops block props — don't bring one back.
+- **Executable block = client-only, and `isEditable`-aware.** Its spec branches on
+  `editor.isEditable`: editing → the CodeMirror authoring UI + live preview; read-only → just
+  the live `CodeRunner` output. `CodeRunner` feeds empty code until mounted, so author code
+  **never executes during SSR**. It's behind the `/runner` entry (`react-runner` →
+  `eval`/`new Function`) for consumers who want to keep a strict CSP.
 - **Scope is explicit.** `CodeRunner` runs author code with `{ React, ...scope }` and never
   writes to `globalThis`. The optional `scope` threads consistently: `BlockEditor`
   (`runnerScope`) → `createEditorSchema(scope)` → the executable spec → `CodeRunner`, and
-  `PostRenderer` (`scope`) → `CodeRunner`. Keep editor and render scope identical so previews
-  match published output.
+  `BlockView` (`runnerScope`) → the same schema. Keep editor and view scope identical so
+  previews match displayed output.
 - **No app coupling.** The package must build and run with only its declared peers. App
   specifics enter through exactly one **seam**: `BlockEditor`'s `uploadFile` prop (asset
   storage; defaults to `data:` URLs). There must be **zero** `#/…` or app-path imports in `src/`.
@@ -48,12 +51,12 @@ The document of record is **BlockNote block JSON** — lossless and canonical.
 
 ```
 src/
-  index.ts         main entry: PostRenderer. No BlockNote, no eval (runner lazy-loads client-only).
+  index.ts         main entry: BlockView (read-only display via BlockNote).
   editor.ts        /editor entry: BlockEditor, createEditorSchema, editorSchema, EDITOR_BLOCK_TYPES (heavy: BlockNote + CodeMirror)
   runner.ts        /runner entry: CodeRunner, normalizeRunnerCode  (eval; opt-in)
-  PostRenderer.tsx allowlist renderer (block JSON → React; unknown types render nothing; executable opt-in + lazy)
+  BlockView.tsx    read-only <BlockNoteView editable={false}> over the schema (full-fidelity display)
   BlockEditor.tsx  BlockNote authoring surface (imports BlockNote CSS; uploadFile + runnerScope injected)
-  blocks.tsx       BlockNote schema: native defaults + the executable block; createEditorSchema(scope) factory + EDITOR_BLOCK_TYPES
+  blocks.tsx       BlockNote schema: native defaults + the executable block (isEditable-aware); createEditorSchema(scope) factory
   CodeRunner.tsx   react-runner with an explicit scope (no globalThis); client-only
   normalize-runner-code.ts  "statements then trailing <X/>" → `export default` (react-runner needs it)
   css.d.ts         ambient decl so the BlockNote CSS side-effect imports typecheck
@@ -64,17 +67,20 @@ vitest.config.ts   aliases @bosphorify/blockkit{,/editor,/runner} → src/ so te
 
 ## Architecture notes
 
-- **Three entries, split by cost** so consumers load only what they use. Most hosts only
-  *render*, so the main entry pulls in no BlockNote and no eval. `PostRenderer` internally
-  `React.lazy`-loads `CodeRunner` only when `allowExecutable` is set — so you can render
-  executable content without importing `/runner` yourself.
-- **`PostRenderer` re-implements rendering for the native block types** (paragraph, heading,
-  quote, lists, code, image) on purpose: that's the price of letting a host display content
-  without shipping the whole editor. Keep it in sync with `SUPPORTED_DEFAULTS` in `blocks.tsx`
-  (`test/renderer-parity.test.tsx` asserts every insertable type renders).
-- **Styling** is Tailwind utility classes expected from the host. The only stylesheet imports
-  are BlockNote's own (`@blocknote/core/fonts/inter.css`, `@blocknote/mantine/style.css`)
-  inside `BlockEditor.tsx`, resolved via the BlockNote peer.
+- **Three entries, split by use.** `index` = display (`BlockView`), `/editor` = authoring,
+  `/runner` = the eval runtime. Both `index` and `/editor` pull in BlockNote (display now
+  goes through it), so both are side-effecting (BlockNote CSS) — see `sideEffects` in
+  `package.json`.
+- **Display is BlockNote, not us.** `BlockView` wraps `<BlockNoteView editable={false}>` over
+  `createEditorSchema(scope)`, and syncs to the `document` prop via `editor.replaceBlocks`. For
+  SSR without a client, hosts use BlockNote's own `blocksToFullHTML`. There is deliberately no
+  hand-rolled block-JSON→HTML renderer here anymore.
+- **The executable block is the only custom rendering.** It's `isEditable`-aware so the same
+  spec serves both the editor (CodeMirror + preview) and the read-only view (output only).
+- **Styling.** Display is BlockNote/Mantine styled (full WYSIWYG). The editor-side chrome (the
+  executable block's authoring UI in `blocks.tsx`) uses Tailwind utility classes; the runner's
+  error box carries a minimal inline color so an error reads as an error without a CSS
+  dependency. Both `BlockView` and `BlockEditor` side-effect-import BlockNote's stylesheets.
 - **`normalizeRunnerCode`** exists because react-runner needs an `export default`; the
   authoring convention is "statements, then a trailing JSX expression" which is rewritten to
   a default export. Without it react-runner returns `null`.
@@ -83,15 +89,14 @@ vitest.config.ts   aliases @bosphorify/blockkit{,/editor,/runner} → src/ so te
 
 ```bash
 npm install        # peers are devDependencies so build + tests resolve
-npm test           # vitest run (runner normalization, renderer parity)
+npm test           # vitest run (runner normalization)
 npm run typecheck  # tsc --noEmit
 npm run build      # tsup → dist/{index,editor,runner}.{js,d.ts}
 ```
 
 Tests import via the public package name and are resolved to `src/` by `vitest.config.ts`
-aliases — so they exercise the true public surface with no build step. `renderer-parity`
-uses `react-dom/server` to assert every insertable block renders and that the executable
-block is opt-in only.
+aliases. The BlockNote-backed editor/view aren't unit-tested (mounting BlockNote in jsdom is
+heavy and low-value); `normalizeRunnerCode` — the one piece of pure logic — is.
 
 ## Publishing
 
@@ -105,10 +110,9 @@ block is opt-in only.
 ## Don't
 
 - Don't import from `#/` or any app path inside `src/`.
-- Don't re-introduce curated blocks, a registry, config forms, a markdown bridge, or an
-  analytics seam — they were removed on purpose (see scope discipline above).
+- Don't re-introduce curated blocks, a registry, config forms, a markdown bridge, an analytics
+  seam, or a hand-rolled renderer — they were removed on purpose (see scope discipline above).
 - Don't bundle BlockNote / React / CodeMirror / react-runner into the build — they're peers.
 - Don't add a runtime `dependency`; keep `dependencies` empty.
-- Don't evaluate the executable block on the server, or render it without `allowExecutable`.
-- Don't add a native block to `blocks.tsx` without a matching case in `PostRenderer.tsx`
-  (the renderer-parity test will fail).
+- Don't evaluate the executable block on the server (keep `CodeRunner`'s mounted-gate).
+- Don't add a native block to `blocks.tsx` that the host's BlockNote schema can't render.
