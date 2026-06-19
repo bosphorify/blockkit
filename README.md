@@ -1,140 +1,131 @@
-# @bosphorify/blockkit
+# blockkit — a runnable JSX block for BlockNote
 
-A **runnable JSX block for [BlockNote](https://www.blocknotejs.org/)**, with a constrained
-editor and a read-only view.
+Drop three files into your [BlockNote](https://www.blocknotejs.org/) project and you get an
+**executable block**: authors write a React component in an inline code editor and it runs
+live, both while editing and in the read-only view.
 
-BlockNote gives you the Notion-style editor and a block-JSON document model. **blockkit**
-adds:
+This is **not an npm package** — it's ~250 lines you copy in. No build step, no dependency to
+track. Rendering and editing stay BlockNote's job; this only adds the one block.
 
-- **An executable block** — authors write JSX (a component) in an inline
-  [CodeMirror](https://codemirror.net/) editor and it runs live via
-  [`react-runner`](https://github.com/nihgwu/react-runner). Scope is explicit
-  (`{ React }` by default; inject your own components via `scope`), it runs
-  **client-only**, and it lives behind its own entry so consumers who don't want
-  `eval` never load it.
-- **A constrained editor** — `BlockEditor`: BlockNote's native blocks (paragraph,
-  heading, quote, lists, code, image) plus the executable block, with a slash menu.
-- **A read-only view** — `BlockView`: `<BlockNoteView editable={false}>`, so displaying a
-  document is **BlockNote's own rendering** — every prop the author set (alignment, color,
-  image width…) is honored, with no hand-maintained renderer to drift. The executable block
-  renders just its live output here (no code editor).
+## The files
 
-The document is **BlockNote block JSON** — the canonical, lossless store. blockkit is a
-*layer over* BlockNote, never a fork.
+| File | What it is |
+|---|---|
+| [`src/CodeRunner.tsx`](src/CodeRunner.tsx) | Runs author JSX via [`react-runner`](https://github.com/nihgwu/react-runner) — client-only, sandboxed scope, error boundary, debounced |
+| [`src/normalize-runner-code.ts`](src/normalize-runner-code.ts) | Lets authors write "statements, then a trailing `<App/>`" instead of `export default` |
+| [`src/executable-block.tsx`](src/executable-block.tsx) | The BlockNote block (`createReactBlockSpec`) + the inline CodeMirror editor. Imports the other two. |
 
-Need more block types (callouts, charts, quizzes…)? Add them with BlockNote's own
-[`createReactBlockSpec`](https://www.blocknotejs.org/docs/custom-schemas/custom-blocks).
+Copy all three (keep them together) into wherever your code lives.
 
-## Install
+## Install the peers
+
+You already have BlockNote. Add the three the block needs:
 
 ```bash
-npm install @bosphorify/blockkit
-# required peers
-npm install react react-dom
-
-# BlockNote (for the editor and the read-only view)
-npm install @blocknote/core @blocknote/mantine @blocknote/react \
-            @mantine/core @mantine/hooks
-# the editor also needs CodeMirror (for authoring the executable block)
-npm install @codemirror/lang-javascript @uiw/react-codemirror
-# the executable block runtime
-npm install react-runner
+npm install react-runner @uiw/react-codemirror @codemirror/lang-javascript
 ```
 
-> Tested against React 19; the peer floor is React 18.
+## Use it
 
-**ESM-only.** Ships as ES modules (`"type": "module"`); there is no CommonJS `require`
-build. blockkit bundles **no runtime dependencies** — everything is a peer. Both `BlockView`
-and `BlockEditor` side-effect-import BlockNote's stylesheets
-(`@blocknote/core/fonts/inter.css`, `@blocknote/mantine/style.css`), so your bundler must
-handle CSS imports. The editor additionally uses [Tailwind](https://tailwindcss.com/) utility
-classes for the executable block's authoring chrome, so the **editor** expects Tailwind in the
-host. (The read-only view needs only BlockNote's CSS.)
+**1. Add the block to your schema:**
 
-## Entry points (split by cost)
+```ts
+import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core'
+import { createExecutableBlockSpec } from './executable-block'
 
-| Import | Gives you | Pulls in |
-|---|---|---|
-| `@bosphorify/blockkit` | `BlockView` (read-only display) | BlockNote |
-| `@bosphorify/blockkit/editor` | `BlockEditor`, `createEditorSchema`, `editorSchema`, `EDITOR_BLOCK_TYPES` | BlockNote + CodeMirror (heavy) |
-| `@bosphorify/blockkit/runner` | `CodeRunner`, `normalizeRunnerCode` | react-runner (`eval`) |
+export const schema = BlockNoteSchema.create({
+  blockSpecs: {
+    ...defaultBlockSpecs,
+    executable: createExecutableBlockSpec(),
+  },
+})
+```
 
-## Quick start
+**2. Use that schema in your editor and your read-only view.** The block is `isEditable`-aware
+— it shows the code editor + live preview when editing, and just the live output when not:
 
 ```tsx
-// display a stored document (read-only, full fidelity)
-import { BlockView } from '@bosphorify/blockkit'
-<BlockView document={post.document} />
+import { BlockNoteView } from '@blocknote/mantine'
+import { useCreateBlockNote } from '@blocknote/react'
 
-// author
-import { BlockEditor } from '@bosphorify/blockkit/editor'
-<BlockEditor
-  initialContent={doc}
-  onChange={setDoc}
-  uploadFile={async (file) => (await myStorage.put(file)).url}  // defaults to data: URLs
-/>
+function Editor() {
+  const editor = useCreateBlockNote({ schema })
+  return <BlockNoteView editor={editor} />
+}
+
+function ReadOnly({ document }: { document: any[] }) {
+  const editor = useCreateBlockNote({ schema, initialContent: document })
+  return <BlockNoteView editor={editor} editable={false} />
+}
 ```
 
-### Rendering without shipping BlockNote to the client
-
-`BlockView` is client-only. For SSR / static pages that don't ship BlockNote to the browser,
-use BlockNote's own server-side HTML export — `editor.blocksToFullHTML(blocks)`, or
-`@blocknote/server-util`'s `ServerBlockNoteEditor` for a DOM-free render (see
-[BlockNote's server-side rendering docs](https://www.blocknotejs.org/docs/advanced/server-processing)).
-Pass `editorSchema` so it knows the executable block type.
-
-(The executable block can't run in static HTML — there's no client to eval it — so it falls
-back to an inert placeholder. Use `BlockView` where you want it live.)
-
-### Injecting your own components
-
-Author code in the executable block sees `React` by default. To make your own components
-available (`<Callout/>`, `<Chart/>`, …), pass a `scope`:
+**3. Let authors insert it** — add a slash-menu item (see BlockNote's
+[suggestion menu docs](https://www.blocknotejs.org/docs/ui-components/suggestion-menus)):
 
 ```tsx
-const scope = { Callout, Chart, Button }
-<BlockEditor runnerScope={scope} initialContent={doc} onChange={setDoc} />
-<BlockView document={post.document} runnerScope={scope} />
+{
+  title: 'Code',
+  onItemClick: () => editor.insertBlocks(
+    [{ type: 'executable' }],
+    editor.getTextCursorPosition().block,
+    'after',
+  ),
+}
 ```
 
-Keep the editor and view `scope` the same, so code that previews while authoring also
-renders when displayed.
+## Inject your own components
 
-## Host seam (no app coupling)
+By default author code only sees `React`. Pass a `scope` to expose more:
 
-- **Image upload** — `BlockEditor`'s `uploadFile` prop. Without it, images inline as
-  `data:` URLs so the editor works standalone; pass one to use real storage.
+```ts
+createExecutableBlockSpec({ Chart, Button })
+// author can now write <Chart .../> inside the block
+```
 
-## Security model
+Use the **same scope** when you build the schema for the editor and the read-only view, so a
+preview written while authoring also renders when displayed.
 
-- The executable block uses `eval` / `new Function` (via react-runner), so it requires a CSP
-  with `'unsafe-eval'`. If you never render executable content, don't import `/runner` and
-  keep a strict CSP.
-- `CodeRunner` runs **client-only** (empty code until mounted), so author code **never
-  executes during SSR** and can't touch server secrets.
-- Scope is passed **explicitly**; blockkit never writes to `globalThis`, so author code
-  can't reach app internals by accident.
-- **Trust model:** the executable block runs whenever it's rendered (editor or `BlockView`).
-  Only let **trusted authors** write executable blocks; never feed untrusted documents to a
-  view that renders them. True isolation (iframe / Sandpack) is future work.
+## How authors write code
 
-## Development
+Statements, then a trailing JSX expression — `normalizeRunnerCode` rewrites it to the
+`export default` that react-runner needs:
+
+```jsx
+const Counter = () => {
+  const [n, setN] = React.useState(0)
+  return <button onClick={() => setN(n + 1)}>clicked {n}</button>
+}
+
+<Counter />
+```
+
+(An explicit `export default <X/>` works too.)
+
+## Security
+
+- The block uses `eval` / `new Function` (react-runner), so it needs a CSP that allows
+  `'unsafe-eval'`. If you don't render executable blocks, don't ship these files.
+- `CodeRunner` runs **client-only** — author code never executes during SSR, so it can't
+  touch server secrets.
+- Scope is passed **explicitly**; the runner never writes to `globalThis`, so author code
+  can only reach what you hand it.
+- **Trust model:** only let **trusted authors** write executable blocks — never feed an
+  untrusted document to a view that renders them. True isolation (iframe / Sandpack) is
+  future work.
+
+## Need other blocks?
+
+Callouts, charts, quizzes — that's plain BlockNote. Write them with
+[`createReactBlockSpec`](https://www.blocknotejs.org/docs/custom-schemas/custom-blocks), the
+same way this block is built.
+
+## Working on these files
 
 ```bash
-npm install        # installs peers as devDependencies for build/test
-npm test           # vitest (runner normalization)
-npm run typecheck  # tsc --noEmit
-npm run build      # tsup → dist/{index,editor,runner}.{js,d.ts}
+npm install        # peers, for typecheck + the one test
+npm run typecheck
+npm test           # vitest — covers normalizeRunnerCode (the one piece of pure logic)
 ```
-
-See [`examples/demo`](examples/demo) for a runnable Vite app (editor + read-only view side by
-side).
-
-## Publishing
-
-`npm publish` runs `prepublishOnly` (which builds `dist/`). The published tarball contains
-only `dist/` (see `files`); `exports` point at the built JS + `.d.ts`. It's a public scoped
-package (`publishConfig.access = "public"`).
 
 ## License
 

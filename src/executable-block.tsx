@@ -1,26 +1,25 @@
 import { javascript } from '@codemirror/lang-javascript'
-import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core'
 import { createReactBlockSpec } from '@blocknote/react'
 import CodeMirror from '@uiw/react-codemirror'
 import * as React from 'react'
 import { CodeRunner } from './CodeRunner'
 
 /**
- * BlockNote schema = a CONSTRAINED pick of default blocks + one executable
- * block that runs author-written JSX (see CodeRunner).
+ * A BlockNote block that runs author-written JSX live (via react-runner).
  *
- * Display goes through BlockNote itself (BlockView, or the host's own
- * BlockNoteView / blocksToFullHTML), so every type here renders by construction.
+ * Add it to your own schema:
+ *
+ *   import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core'
+ *   const schema = BlockNoteSchema.create({
+ *     blockSpecs: { ...defaultBlockSpecs, executable: createExecutableBlockSpec(scope) },
+ *   })
+ *
+ * `scope` (optional) exposes extra values to author code (default: just React).
+ * The block is `isEditable`-aware: the CodeMirror authoring UI + live preview
+ * when editing, just the live output when read-only.
+ *
+ * Styling is plain inline styles so this file is self-contained — restyle freely.
  */
-const SUPPORTED_DEFAULTS = {
-  paragraph: defaultBlockSpecs.paragraph,
-  heading: defaultBlockSpecs.heading,
-  quote: defaultBlockSpecs.quote,
-  bulletListItem: defaultBlockSpecs.bulletListItem,
-  numberedListItem: defaultBlockSpecs.numberedListItem,
-  codeBlock: defaultBlockSpecs.codeBlock,
-  image: defaultBlockSpecs.image,
-}
 
 const DEFAULT_CODE = `const Demo = () => {
   const [n, setN] = React.useState(6)
@@ -41,6 +40,12 @@ const DEFAULT_CODE = `const Demo = () => {
 
 <Demo />`
 
+const panel: React.CSSProperties = {
+  overflow: 'hidden',
+  border: '1px solid #e4e4e7',
+  background: '#fff',
+}
+
 function ExecutableView({
   code: externalCode,
   scope,
@@ -53,8 +58,7 @@ function ExecutableView({
   const [code, setCode] = React.useState(externalCode)
   const lastCommitted = React.useRef(externalCode)
 
-  // adopt external changes (undo/redo, collaborative edits) when they differ
-  // from what we last committed — otherwise undo leaves stale code on screen
+  // adopt external changes (undo/redo) when they differ from our last commit
   React.useEffect(() => {
     if (externalCode !== lastCommitted.current) {
       lastCommitted.current = externalCode
@@ -62,6 +66,7 @@ function ExecutableView({
     }
   }, [externalCode])
 
+  // debounce committing back to the document
   React.useEffect(() => {
     if (code === lastCommitted.current) return
     const t = setTimeout(() => {
@@ -74,13 +79,34 @@ function ExecutableView({
 
   return (
     <div
-      className="my-1 grid w-full grid-cols-1 gap-2 rounded-none border border-border bg-muted/40 p-2 md:grid-cols-2"
       contentEditable={false}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        gap: 8,
+        margin: '4px 0',
+        padding: 8,
+        border: '1px solid #e4e4e7',
+        background: '#fafafa',
+      }}
     >
-      <div className="overflow-hidden rounded-none border border-border bg-card">
-        <div className="flex flex-wrap items-center gap-x-2 border-b border-amber-300/60 bg-amber-50 px-2 py-1 font-mono text-[10px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+      <div style={panel}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 8,
+            padding: '4px 8px',
+            borderBottom: '1px solid #fcd34d',
+            background: '#fffbeb',
+            color: '#92400e',
+            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+            fontSize: 10,
+          }}
+        >
           <span>⚠ advanced · runs code</span>
-          <span className="opacity-70">scope: React · end with &lt;MyComponent /&gt;</span>
+          <span style={{ opacity: 0.7 }}>scope: React · end with &lt;MyComponent /&gt;</span>
         </div>
         <CodeMirror
           value={code}
@@ -92,17 +118,18 @@ function ExecutableView({
             closeBrackets: true,
             autocompletion: false,
           }}
-          className="text-[12px]"
+          style={{ fontSize: 12 }}
         />
       </div>
-      <div className="prose prose-sm max-w-none overflow-auto rounded-none border border-border bg-card p-3">
+      <div style={{ ...panel, overflow: 'auto', padding: 12 }}>
         <CodeRunner code={code} scope={scope} />
       </div>
     </div>
   )
 }
 
-function makeExecutable(scope?: Record<string, unknown>) {
+/** Build the executable block spec. Put the result in your schema's `blockSpecs`. */
+export function createExecutableBlockSpec(scope?: Record<string, unknown>) {
   return createReactBlockSpec(
     {
       type: 'executable',
@@ -110,8 +137,7 @@ function makeExecutable(scope?: Record<string, unknown>) {
       content: 'none',
     },
     {
-      // editing → full authoring UI (CodeMirror + live preview);
-      // read-only (BlockView / BlockNote read-only) → just the live output
+      // editing → full authoring UI; read-only → just the live output
       render: ({ block, editor }) =>
         editor.isEditable ? (
           <ExecutableView
@@ -125,25 +151,5 @@ function makeExecutable(scope?: Record<string, unknown>) {
           </div>
         ),
     },
-  )
+  )()
 }
-
-/**
- * Build the editor schema. Pass `scope` to make extra values (e.g. your own
- * components) available to author code inside executable blocks.
- */
-export function createEditorSchema(scope?: Record<string, unknown>) {
-  return BlockNoteSchema.create({
-    blockSpecs: {
-      ...SUPPORTED_DEFAULTS,
-      executable: makeExecutable(scope)(),
-    },
-  })
-}
-
-export const editorSchema = createEditorSchema()
-
-export type EditorSchema = typeof editorSchema
-
-/** every type an author can insert — the renderer-parity test iterates this */
-export const EDITOR_BLOCK_TYPES = Object.keys(editorSchema.blockSpecs)
