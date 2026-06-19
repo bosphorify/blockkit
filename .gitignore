@@ -1,10 +1,5 @@
 node_modules
-dist
-coverage
 *.log
-*.tsbuildinfo
 .DS_Store
 .idea
 .vscode
-.turbo
-.playwright-mcp
