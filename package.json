@@ -1,7 +1,7 @@
 {
   "name": "@bosphorify/blockkit",
   "version": "0.1.0",
-  "description": "A runnable JSX block for BlockNote (client-only eval) plus a light block-JSON → React renderer.",
+  "description": "A runnable JSX block for BlockNote, with a constrained editor and a read-only view.",
   "keywords": [
     "blocknote",
     "block-editor",
@@ -26,6 +26,7 @@
   },
   "type": "module",
   "sideEffects": [
+    "./dist/index.js",
     "./dist/editor.js"
   ],
   "exports": {

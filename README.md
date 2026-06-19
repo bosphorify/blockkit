@@ -1,9 +1,10 @@
 # @bosphorify/blockkit
 
-A **runnable JSX block for [BlockNote](https://www.blocknotejs.org/)**, plus a light
-read-only renderer.
+A **runnable JSX block for [BlockNote](https://www.blocknotejs.org/)**, with a constrained
+editor and a read-only view.
 
-BlockNote gives you the Notion-style editor. **blockkit** adds:
+BlockNote gives you the Notion-style editor and a block-JSON document model. **blockkit**
+adds:
 
 - **An executable block** — authors write JSX (a component) in an inline
   [CodeMirror](https://codemirror.net/) editor and it runs live via
@@ -13,18 +14,16 @@ BlockNote gives you the Notion-style editor. **blockkit** adds:
   `eval` never load it.
 - **A constrained editor** — `BlockEditor`: BlockNote's native blocks (paragraph,
   heading, quote, lists, code, image) plus the executable block, with a slash menu.
-- **A light allowlist renderer** — `PostRenderer` turns stored block JSON into plain
-  React **without loading BlockNote**, so a site or app can display authored content
-  far cheaper (and server-side) than mounting the editor. Unknown block types render
-  **nothing** (default-deny); the executable block renders **only** with
-  `allowExecutable`.
+- **A read-only view** — `BlockView`: `<BlockNoteView editable={false}>`, so displaying a
+  document is **BlockNote's own rendering** — every prop the author set (alignment, color,
+  image width…) is honored, with no hand-maintained renderer to drift. The executable block
+  renders just its live output here (no code editor).
 
 The document is **BlockNote block JSON** — the canonical, lossless store. blockkit is a
 *layer over* BlockNote, never a fork.
 
 Need more block types (callouts, charts, quizzes…)? Add them with BlockNote's own
-[`createReactBlockSpec`](https://www.blocknotejs.org/docs/custom-schemas/custom-blocks) —
-blockkit deliberately stays out of that business.
+[`createReactBlockSpec`](https://www.blocknotejs.org/docs/custom-schemas/custom-blocks).
 
 ## Install
 
@@ -32,49 +31,42 @@ blockkit deliberately stays out of that business.
 npm install @bosphorify/blockkit
 # required peers
 npm install react react-dom
+
+# BlockNote (for the editor and the read-only view)
+npm install @blocknote/core @blocknote/mantine @blocknote/react \
+            @mantine/core @mantine/hooks
+# the editor also needs CodeMirror (for authoring the executable block)
+npm install @codemirror/lang-javascript @uiw/react-codemirror
+# the executable block runtime
+npm install react-runner
 ```
 
 > Tested against React 19; the peer floor is React 18.
 
-Add peers only for the entries you use:
-
-```bash
-# for /editor (the authoring surface) — note the Mantine peers, which
-# @blocknote/mantine requires but npm does not auto-install
-npm install @blocknote/core @blocknote/mantine @blocknote/react \
-            @mantine/core @mantine/hooks \
-            @codemirror/lang-javascript @uiw/react-codemirror
-# for the executable block (also used by /runner directly)
-npm install react-runner
-```
-
 **ESM-only.** Ships as ES modules (`"type": "module"`); there is no CommonJS `require`
-build. blockkit bundles **no runtime dependencies** — everything is a peer. **Styling
-assumes [Tailwind](https://tailwindcss.com/) in the host**: components use Tailwind
-utility classes; blockkit ships no global CSS of its own. The **`/editor`** entry
-additionally side-effect-imports BlockNote's stylesheets
+build. blockkit bundles **no runtime dependencies** — everything is a peer. Both `BlockView`
+and `BlockEditor` side-effect-import BlockNote's stylesheets
 (`@blocknote/core/fonts/inter.css`, `@blocknote/mantine/style.css`), so your bundler must
-handle CSS imports when you use it.
+handle CSS imports. The editor additionally uses [Tailwind](https://tailwindcss.com/) utility
+classes for the executable block's authoring chrome, so the **editor** expects Tailwind in the
+host. (The read-only view needs only BlockNote's CSS.)
 
 ## Entry points (split by cost)
 
 | Import | Gives you | Pulls in |
 |---|---|---|
-| `@bosphorify/blockkit` | `PostRenderer` | nothing (the runner lazy-loads client-only, only when `allowExecutable`) |
+| `@bosphorify/blockkit` | `BlockView` (read-only display) | BlockNote |
 | `@bosphorify/blockkit/editor` | `BlockEditor`, `createEditorSchema`, `editorSchema`, `EDITOR_BLOCK_TYPES` | BlockNote + CodeMirror (heavy) |
 | `@bosphorify/blockkit/runner` | `CodeRunner`, `normalizeRunnerCode` | react-runner (`eval`) |
-
-Render-only consumers (most pages) import the main entry and never load BlockNote or the
-runner.
 
 ## Quick start
 
 ```tsx
-// render a stored document — light, SSR-able, no editor
-import { PostRenderer } from '@bosphorify/blockkit'
-<PostRenderer document={post.document} allowExecutable />  // omit allowExecutable to deny eval
+// display a stored document (read-only, full fidelity)
+import { BlockView } from '@bosphorify/blockkit'
+<BlockView document={post.document} />
 
-// author (admin side) — separate, heavier entry
+// author
 import { BlockEditor } from '@bosphorify/blockkit/editor'
 <BlockEditor
   initialContent={doc}
@@ -83,23 +75,30 @@ import { BlockEditor } from '@bosphorify/blockkit/editor'
 />
 ```
 
+### Rendering without shipping BlockNote to the client
+
+`BlockView` is client-only. For SSR / static pages that don't ship BlockNote to the browser,
+use BlockNote's own server-side HTML export — `editor.blocksToFullHTML(blocks)`, or
+`@blocknote/server-util`'s `ServerBlockNoteEditor` for a DOM-free render (see
+[BlockNote's server-side rendering docs](https://www.blocknotejs.org/docs/advanced/server-processing)).
+Pass `editorSchema` so it knows the executable block type.
+
+(The executable block can't run in static HTML — there's no client to eval it — so it falls
+back to an inert placeholder. Use `BlockView` where you want it live.)
+
 ### Injecting your own components
 
 Author code in the executable block sees `React` by default. To make your own components
-available (so authors can write `<Callout/>`, `<Chart/>`, …), pass a `scope`:
+available (`<Callout/>`, `<Chart/>`, …), pass a `scope`:
 
 ```tsx
 const scope = { Callout, Chart, Button }
-
-// in the editor
 <BlockEditor runnerScope={scope} initialContent={doc} onChange={setDoc} />
-
-// when rendering
-<PostRenderer document={post.document} allowExecutable scope={scope} />
+<BlockView document={post.document} runnerScope={scope} />
 ```
 
-Keep the editor and render `scope` the same, so code that previews while authoring also
-renders when published.
+Keep the editor and view `scope` the same, so code that previews while authoring also
+renders when displayed.
 
 ## Host seam (no app coupling)
 
@@ -108,29 +107,28 @@ renders when published.
 
 ## Security model
 
-- `PostRenderer` is an **allowlist**: unknown block types render nothing. The executable
-  block renders **only** with `allowExecutable`, and **only** via the **client-only**
-  `CodeRunner` (never evaluated during SSR — author code can't touch server secrets).
-- The runner uses `eval` / `new Function`, so rendering executable content requires a CSP
-  with `'unsafe-eval'`. If you don't render executable content, don't import `/runner` and
+- The executable block uses `eval` / `new Function` (via react-runner), so it requires a CSP
+  with `'unsafe-eval'`. If you never render executable content, don't import `/runner` and
   keep a strict CSP.
+- `CodeRunner` runs **client-only** (empty code until mounted), so author code **never
+  executes during SSR** and can't touch server secrets.
 - Scope is passed **explicitly**; blockkit never writes to `globalThis`, so author code
   can't reach app internals by accident.
-- **Trust model:** only let **trusted authors** write executable blocks; never feed
-  untrusted input to the runner. True isolation (iframe / Sandpack) is future work.
+- **Trust model:** the executable block runs whenever it's rendered (editor or `BlockView`).
+  Only let **trusted authors** write executable blocks; never feed untrusted documents to a
+  view that renders them. True isolation (iframe / Sandpack) is future work.
 
 ## Development
 
 ```bash
 npm install        # installs peers as devDependencies for build/test
-npm test           # vitest (runner normalization, renderer parity)
+npm test           # vitest (runner normalization)
 npm run typecheck  # tsc --noEmit
 npm run build      # tsup → dist/{index,editor,runner}.{js,d.ts}
 ```
 
-The test suite imports the package by its **public name** (e.g. `@bosphorify/blockkit`),
-resolved to `src/` by aliases in `vitest.config.ts` — so tests exercise the real public API
-with no build step.
+See [`examples/demo`](examples/demo) for a runnable Vite app (editor + read-only view side by
+side).
 
 ## Publishing
 

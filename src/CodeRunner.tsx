@@ -33,11 +33,8 @@ class Boundary extends React.Component<
 }
 
 function ErrorBox({ message }: { message: string }) {
-  return (
-    <pre className="rounded border border-destructive/40 bg-destructive/10 p-3 text-xs whitespace-pre-wrap text-destructive">
-      error: {message}
-    </pre>
-  )
+  // minimal inline style so an error reads as an error without a CSS dependency
+  return <pre style={{ color: '#dc2626', whiteSpace: 'pre-wrap' }}>error: {message}</pre>
 }
 
 export function CodeRunner({
@@ -70,7 +67,7 @@ export function CodeRunner({
     scope: runnerScope,
   })
 
-  if (!mounted) return <div className="text-sm text-muted-foreground">rendering…</div>
+  if (!mounted) return <div>rendering…</div>
   if ('error' in normalized) return <ErrorBox message={normalized.error} />
   if (error) return <ErrorBox message={error} />
   // boundary keyed by SETTLED code → render throws are contained, state survives typing

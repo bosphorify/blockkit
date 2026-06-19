@@ -9,9 +9,8 @@ import { CodeRunner } from './CodeRunner'
  * BlockNote schema = a CONSTRAINED pick of default blocks + one executable
  * block that runs author-written JSX (see CodeRunner).
  *
- * Every type here has a renderer in PostRenderer, so authors can never insert
- * something the published page silently drops (test/renderer-parity.test.tsx
- * enforces this).
+ * Display goes through BlockNote itself (BlockView, or the host's own
+ * BlockNoteView / blocksToFullHTML), so every type here renders by construction.
  */
 const SUPPORTED_DEFAULTS = {
   paragraph: defaultBlockSpecs.paragraph,
@@ -111,13 +110,20 @@ function makeExecutable(scope?: Record<string, unknown>) {
       content: 'none',
     },
     {
-      render: ({ block, editor }) => (
-        <ExecutableView
-          code={String(block.props.code)}
-          scope={scope}
-          onCommit={(code) => editor.updateBlock(block, { props: { code } })}
-        />
-      ),
+      // editing → full authoring UI (CodeMirror + live preview);
+      // read-only (BlockView / BlockNote read-only) → just the live output
+      render: ({ block, editor }) =>
+        editor.isEditable ? (
+          <ExecutableView
+            code={String(block.props.code)}
+            scope={scope}
+            onCommit={(code) => editor.updateBlock(block, { props: { code } })}
+          />
+        ) : (
+          <div contentEditable={false}>
+            <CodeRunner code={String(block.props.code)} scope={scope} />
+          </div>
+        ),
     },
   )
 }

@@ -1,13 +1,15 @@
 /**
- * @bosphorify/blockkit — a runnable JSX block for BlockNote, plus a light
- * read-only renderer.
+ * @bosphorify/blockkit — a runnable JSX block for BlockNote, with a constrained
+ * editor and a read-only view.
  *
- * Three entry points, split by cost so consumers pull only what they use:
- *   - `@bosphorify/blockkit`         (this) — PostRenderer: block JSON → React.
- *                                     No BlockNote, no eval. The executable
- *                                     block's runtime lazy-loads client-only,
- *                                     only when `allowExecutable` is passed.
- *   - `@bosphorify/blockkit/editor`  — the BlockNote authoring surface (heavy).
+ * Three entry points, split by cost:
+ *   - `@bosphorify/blockkit`         (this) — BlockView: read-only display of a
+ *                                     document, via BlockNote (full fidelity).
+ *   - `@bosphorify/blockkit/editor`  — BlockEditor + the schema (authoring).
  *   - `@bosphorify/blockkit/runner`  — the executable block runtime (react-runner/eval).
+ *
+ * Rendering is BlockNote's job: BlockView wraps `<BlockNoteView editable={false}>`,
+ * so every block prop is honored. For SSR without shipping BlockNote to the
+ * client, use BlockNote's own `editor.blocksToFullHTML(blocks)`.
  */
-export { PostRenderer } from './PostRenderer'
+export { BlockView } from './BlockView'

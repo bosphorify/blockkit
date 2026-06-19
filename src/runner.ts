@@ -5,9 +5,9 @@
  * `new Function`), so importing it is an explicit choice. Consumers who don't
  * render executable blocks never load it, and can keep a strict CSP.
  *
- * Note: the renderer (main entry) lazy-loads CodeRunner internally only when a
- * caller passes `allowExecutable`, so you don't need to import this yourself
- * just to render executable posts — it's here for direct/advanced use.
+ * Note: the editor/view schema (blocks.tsx) already wires CodeRunner into the
+ * executable block, so you don't need to import this yourself just to author or
+ * display executable content — it's here for direct/advanced use.
  */
 export { CodeRunner } from './CodeRunner'
 export { normalizeRunnerCode } from './normalize-runner-code'
